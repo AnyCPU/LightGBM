@@ -8,7 +8,14 @@ from pathlib import Path
 
 # .basic is intentionally loaded as early as possible, to dlopen() lib_lightgbm.{dll,dylib,so}
 # and its dependencies as early as possible
-from .basic import Booster, Dataset, Sequence, register_logger, register_leveled_logger
+from .basic import (
+    Booster,
+    Dataset,
+    Sequence,
+    register_logger,
+    register_leveled_logger,
+    unregister_leveled_logger,
+)
 from .callback import EarlyStopException, early_stopping, log_evaluation, record_evaluation, reset_parameter
 from .engine import CVBooster, cv, train
 
@@ -37,6 +44,7 @@ __all__ = [
     "Sequence",
     "register_logger",
     "register_leveled_logger",
+    "unregister_leveled_logger",
     "train",
     "cv",
     "LGBMModel",

@@ -172,26 +172,17 @@ def test_register_custom_logger():
 @pytest.fixture()
 def _leveled_logger_cleanup():
     """Register leveled callback and guarantee cleanup regardless of test outcome."""
-    from lightgbm.basic import _log_callback_with_level, _LIB, _DummyLeveledLogger
+    from lightgbm.basic import _DummyLeveledLogger
 
-    # Set argtypes/restype here — cannot rely on the env-var opt-in block being active.
-    # This is idempotent if already set by module boot.
-    _LIB.LGBM_RegisterLogCallbackWithLevel.restype = ctypes.c_int
-    _cb_type = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
-    _LIB.LGBM_RegisterLogCallbackWithLevel.argtypes = [_cb_type]
-
-    cb = _cb_type(_log_callback_with_level)
-    # store on _LIB to prevent GC (same pattern as module-level registration)
-    _LIB.test_callback_with_level = cb  # type: ignore[attr-defined]
-    assert _LIB.LGBM_RegisterLogCallbackWithLevel(cb) == 0
+    # Create a dummy logger and register it to initialize the callback infrastructure
+    lgb.register_leveled_logger(_DummyLeveledLogger())
 
     yield  # run the test
 
-    # teardown: reset C++ callback pointer before dropping Python reference
-    # (prevents dangling function pointer)
-    assert _LIB.LGBM_UnregisterLogCallbackWithLevel() == 0
+    # teardown: unregister the leveled callback using the public API
+    lgb.unregister_leveled_logger()
+    # Reset to dummy to suppress logging
     lgb.register_leveled_logger(_DummyLeveledLogger())
-    _LIB.test_callback_with_level = None  # type: ignore[attr-defined]
 
 
 def test_register_leveled_logger_invalid():
@@ -285,6 +276,8 @@ def test_log_callback_with_level_unit():
 
 
 def test_register_leveled_logger_routing(_leveled_logger_cleanup):
+    from lightgbm.basic import _log_callback_with_level
+
     info_messages: list = []
     warning_messages: list = []
 
@@ -302,6 +295,11 @@ def test_register_leveled_logger_routing(_leveled_logger_cleanup):
             pass
 
     lgb.register_leveled_logger(CapturingLogger())
+
+    # Explicitly trigger main-thread messages to avoid flakiness if training messages
+    # happen to run on OpenMP worker threads (which bypass the callback).
+    _log_callback_with_level(1, b"test info message")  # C_API_LOG_LEVEL_INFO
+    _log_callback_with_level(0, b"test warning message")  # C_API_LOG_LEVEL_WARNING
 
     X = np.array([[1, 2, 3], [1, 2, 4], [1, 2, 4], [1, 2, 3]], dtype=np.float32)
     y = np.array([0, 1, 1, 0])

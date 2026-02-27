@@ -48,6 +48,14 @@ typedef void* ByteBufferHandle; /*!< \brief Handle of ByteBuffer. */
 #define C_API_FEATURE_IMPORTANCE_SPLIT (0)  /*!< \brief Split type of feature importance. */
 #define C_API_FEATURE_IMPORTANCE_GAIN  (1)  /*!< \brief Gain type of feature importance. */
 
+/*!
+ * \brief Log level constants for use with ``LGBM_RegisterLogCallbackWithLevel``.
+ * \note **Severity ordering:** Lower numeric values indicate more severe messages.
+ * ``C_API_LOG_LEVEL_FATAL`` (-1) is most severe, and ``C_API_LOG_LEVEL_DEBUG`` (2) is least severe.
+ * This follows the internal ``LogLevel`` enum and differs from Python logging conventions.
+ * Callbacks should be careful not to use comparisons like ``level >= C_API_LOG_LEVEL_WARNING``
+ * to filter "warnings and above", as that would include Info and Debug instead.
+ */
 #define C_API_LOG_LEVEL_FATAL   (-1)  /*!< \brief Fatal log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
 #define C_API_LOG_LEVEL_WARNING  (0)  /*!< \brief Warning log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
 #define C_API_LOG_LEVEL_INFO     (1)  /*!< \brief Info log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
