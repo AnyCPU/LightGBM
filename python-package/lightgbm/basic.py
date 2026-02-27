@@ -12,6 +12,7 @@ import abc
 import ctypes
 import inspect
 import json
+import sys
 import warnings
 from collections import OrderedDict
 from copy import deepcopy
@@ -61,6 +62,7 @@ __all__ = [
     "LGBMDeprecationWarning",
     "LightGBMError",
     "register_logger",
+    "register_leveled_logger",
     "Sequence",
 ]
 
@@ -228,9 +230,29 @@ class _DummyLogger:
         warnings.warn(msg, stacklevel=3)
 
 
+class _DummyLeveledLogger:
+    def debug(self, msg: str) -> None:
+        print(msg)  # noqa: T201
+
+    def info(self, msg: str) -> None:
+        print(msg)  # noqa: T201
+
+    def warning(self, msg: str) -> None:
+        print(msg)  # noqa: T201
+
+    def error(self, msg: str) -> None:
+        print(msg, file=sys.stderr)  # noqa: T201
+
+
 _LOGGER: Any = _DummyLogger()
 _INFO_METHOD_NAME = "info"
 _WARNING_METHOD_NAME = "warning"
+
+_LEVELED_LOGGER: Any = _DummyLeveledLogger()
+_LEVELED_DEBUG_METHOD_NAME = "debug"
+_LEVELED_INFO_METHOD_NAME = "info"
+_LEVELED_WARNING_METHOD_NAME = "warning"
+_LEVELED_ERROR_METHOD_NAME = "error"
 
 
 def _has_method(logger: Any, method_name: str) -> bool:
@@ -262,6 +284,44 @@ def register_logger(
     _WARNING_METHOD_NAME = warning_method_name
 
 
+def register_leveled_logger(
+    logger: Any,
+    debug_method_name: str = "debug",
+    info_method_name: str = "info",
+    warning_method_name: str = "warning",
+    error_method_name: str = "error",
+) -> None:
+    """Register custom logger for use with the leveled log callback.
+
+    Parameters
+    ----------
+    logger : Any
+        Custom logger. Must provide all four configured methods.
+    debug_method_name : str, optional (default="debug")
+        Method used to log debug messages.
+    info_method_name : str, optional (default="info")
+        Method used to log info messages.
+    warning_method_name : str, optional (default="warning")
+        Method used to log warning messages.
+    error_method_name : str, optional (default="error")
+        Method used to log error (fatal) messages.
+    """
+    for method_name in (debug_method_name, info_method_name, warning_method_name, error_method_name):
+        if not _has_method(logger, method_name):
+            raise TypeError(f"Logger must provide '{method_name}' method")
+
+    global _LEVELED_LOGGER, _LEVELED_DEBUG_METHOD_NAME, _LEVELED_INFO_METHOD_NAME
+    global _LEVELED_WARNING_METHOD_NAME, _LEVELED_ERROR_METHOD_NAME
+    _LEVELED_LOGGER = logger
+    _LEVELED_DEBUG_METHOD_NAME = debug_method_name
+    _LEVELED_INFO_METHOD_NAME = info_method_name
+    _LEVELED_WARNING_METHOD_NAME = warning_method_name
+    _LEVELED_ERROR_METHOD_NAME = error_method_name
+
+
+# _normalize_native_string, _log_native, and _log_callback below reassemble the 3-chunk
+# messages from LGBM_RegisterLogCallback. Kept intact; superseded on threads where
+# LGBM_RegisterLogCallbackWithLevel is active (see LIGHTGBM_LEVELED_LOG_CALLBACK).
 def _normalize_native_string(func: Callable[[str], None]) -> Callable[[str], None]:
     """Join log messages from native library which come by chunks."""
     msg_normalized: List[str] = []
@@ -297,6 +357,19 @@ def _log_callback(msg: bytes) -> None:
     _log_native(str(msg.decode("utf-8")))
 
 
+def _log_callback_with_level(level: int, msg: bytes) -> None:
+    """Redirect logs from native library into Python, routing by log level."""
+    text = msg.decode("utf-8", errors="replace")
+    if level == -1:  # C_API_LOG_FATAL
+        getattr(_LEVELED_LOGGER, _LEVELED_ERROR_METHOD_NAME)(text)
+    elif level == 0:  # C_API_LOG_WARNING
+        getattr(_LEVELED_LOGGER, _LEVELED_WARNING_METHOD_NAME)(text)
+    elif level == 2:  # C_API_LOG_DEBUG
+        getattr(_LEVELED_LOGGER, _LEVELED_DEBUG_METHOD_NAME)(text)
+    else:  # C_API_LOG_INFO (level == 1) and any unknown future level
+        getattr(_LEVELED_LOGGER, _LEVELED_INFO_METHOD_NAME)(text)
+
+
 # connect the Python logger to logging in lib_lightgbm
 if environ.get("LIGHTGBM_BUILD_DOC", "False") != "True":
     _LIB.LGBM_GetLastError.restype = ctypes.c_char_p
@@ -304,6 +377,15 @@ if environ.get("LIGHTGBM_BUILD_DOC", "False") != "True":
     _LIB.callback = callback(_log_callback)  # type: ignore[attr-defined]
     if _LIB.LGBM_RegisterLogCallback(_LIB.callback) != 0:
         raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
+
+    # opt-in leveled callback: delivers each message atomically with log level routing
+    if environ.get("LIGHTGBM_LEVELED_LOG_CALLBACK", "False") == "True":
+        _LIB.LGBM_RegisterLogCallbackWithLevel.restype = ctypes.c_int
+        _LIB.LGBM_RegisterLogCallbackWithLevel.argtypes = [ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)]
+        _leveled_callback_type = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
+        _LIB.callback_with_level = _leveled_callback_type(_log_callback_with_level)  # type: ignore[attr-defined]
+        if _LIB.LGBM_RegisterLogCallbackWithLevel(_LIB.callback_with_level) != 0:
+            raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
 
 
 _NUMERIC_TYPES = (int, float, bool)
