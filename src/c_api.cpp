@@ -984,6 +984,12 @@ int LGBM_RegisterLogCallbackWithLevel(void (*callback)(int, const char*)) {
   API_END();
 }
 
+int LGBM_UnregisterLogCallbackWithLevel(void) {
+  API_BEGIN();
+  Log::ResetCallBackWithLevel(nullptr);
+  API_END();
+}
+
 static inline int SampleCount(int32_t total_nrow, const Config& config) {
   return static_cast<int>(total_nrow < config.bin_construct_sample_cnt ? total_nrow : config.bin_construct_sample_cnt);
 }

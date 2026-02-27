@@ -293,6 +293,10 @@ def register_leveled_logger(
 ) -> None:
     """Register custom logger for use with the leveled log callback.
 
+    This function registers both the Python-side logger object and activates the C++ leveled
+    callback in the native library. The leveled callback routes each log message to the appropriate
+    logger method based on its level (debug, info, warning, or error).
+
     Parameters
     ----------
     logger : Any
@@ -305,6 +309,16 @@ def register_leveled_logger(
         Method used to log warning messages.
     error_method_name : str, optional (default="error")
         Method used to log error (fatal) messages.
+
+    Notes
+    -----
+    The leveled callback is process-wide and takes precedence over the legacy callback
+    registered via ``register_logger()``. This function is safe to call multiple times;
+    subsequent calls will update both the Python-side logger and the C++ registration.
+
+    Thread safety:
+    This function is not thread-safe for concurrent calls. Calls should be made from a single
+    thread, typically during application initialization before training begins.
     """
     for method_name in (debug_method_name, info_method_name, warning_method_name, error_method_name):
         if not _has_method(logger, method_name):
@@ -317,6 +331,19 @@ def register_leveled_logger(
     _LEVELED_INFO_METHOD_NAME = info_method_name
     _LEVELED_WARNING_METHOD_NAME = warning_method_name
     _LEVELED_ERROR_METHOD_NAME = error_method_name
+
+    # Register the C++ leveled callback (idempotent: can be called multiple times)
+    if not hasattr(_LIB, "LGBM_RegisterLogCallbackWithLevel"):
+        # Older builds without leveled callback support
+        return
+    _LIB.LGBM_RegisterLogCallbackWithLevel.restype = ctypes.c_int
+    _LIB.LGBM_RegisterLogCallbackWithLevel.argtypes = [
+        ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
+    ]
+    _leveled_callback_type = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
+    _LIB.callback_with_level = _leveled_callback_type(_log_callback_with_level)  # type: ignore[attr-defined]
+    if _LIB.LGBM_RegisterLogCallbackWithLevel(_LIB.callback_with_level) != 0:
+        raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
 
 
 # _normalize_native_string, _log_native, and _log_callback below reassemble the 3-chunk
@@ -360,13 +387,15 @@ def _log_callback(msg: bytes) -> None:
 def _log_callback_with_level(level: int, msg: bytes) -> None:
     """Redirect logs from native library into Python, routing by log level."""
     text = msg.decode("utf-8", errors="replace")
-    if level == -1:  # C_API_LOG_FATAL
+    if level == -1:  # C_API_LOG_LEVEL_FATAL
         getattr(_LEVELED_LOGGER, _LEVELED_ERROR_METHOD_NAME)(text)
-    elif level == 0:  # C_API_LOG_WARNING
+    elif level == 0:  # C_API_LOG_LEVEL_WARNING
         getattr(_LEVELED_LOGGER, _LEVELED_WARNING_METHOD_NAME)(text)
-    elif level == 2:  # C_API_LOG_DEBUG
+    elif level == 1:  # C_API_LOG_LEVEL_INFO
+        getattr(_LEVELED_LOGGER, _LEVELED_INFO_METHOD_NAME)(text)
+    elif level == 2:  # C_API_LOG_LEVEL_DEBUG
         getattr(_LEVELED_LOGGER, _LEVELED_DEBUG_METHOD_NAME)(text)
-    else:  # C_API_LOG_INFO (level == 1) and any unknown future level
+    else:  # unknown future level — fall back to info
         getattr(_LEVELED_LOGGER, _LEVELED_INFO_METHOD_NAME)(text)
 
 
@@ -377,15 +406,6 @@ if environ.get("LIGHTGBM_BUILD_DOC", "False") != "True":
     _LIB.callback = callback(_log_callback)  # type: ignore[attr-defined]
     if _LIB.LGBM_RegisterLogCallback(_LIB.callback) != 0:
         raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
-
-    # opt-in leveled callback: delivers each message atomically with log level routing
-    if environ.get("LIGHTGBM_LEVELED_LOG_CALLBACK", "False") == "True":
-        _LIB.LGBM_RegisterLogCallbackWithLevel.restype = ctypes.c_int
-        _LIB.LGBM_RegisterLogCallbackWithLevel.argtypes = [ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)]
-        _leveled_callback_type = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p)
-        _LIB.callback_with_level = _leveled_callback_type(_log_callback_with_level)  # type: ignore[attr-defined]
-        if _LIB.LGBM_RegisterLogCallbackWithLevel(_LIB.callback_with_level) != 0:
-            raise LightGBMError(_LIB.LGBM_GetLastError().decode("utf-8"))
 
 
 _NUMERIC_TYPES = (int, float, bool)

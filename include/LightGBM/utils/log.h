@@ -123,7 +123,7 @@ class Log {
     char str_buf[kBufSize];
     va_start(val, format);
 #ifdef _MSC_VER
-    vsnprintf_s(str_buf, kBufSize, format, val);
+    vsnprintf_s(str_buf, kBufSize, _TRUNCATE, format, val);
 #else
     vsnprintf(str_buf, kBufSize, format, val);
 #endif
@@ -134,11 +134,7 @@ class Log {
 #ifndef LGB_R_BUILD
     if (GetLogCallBackWithLevel() != nullptr) {
       GetLogCallBackWithLevel()(static_cast<int>(LogLevel::Fatal), str_buf);
-      // leveled callback is sole output — old callback and stderr suppressed
-    } else if (GetLogCallBack() != nullptr) {
-      GetLogCallBack()("[LightGBM] [Fatal] ");
-      GetLogCallBack()(str_buf);
-      GetLogCallBack()("\n");
+      // leveled callback is sole output on this thread — old callback and stderr suppressed
     } else {
       fprintf(stderr, "[LightGBM] [Fatal] %s\n", str_buf);
       fflush(stderr);

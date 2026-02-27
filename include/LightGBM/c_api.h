@@ -48,10 +48,10 @@ typedef void* ByteBufferHandle; /*!< \brief Handle of ByteBuffer. */
 #define C_API_FEATURE_IMPORTANCE_SPLIT (0)  /*!< \brief Split type of feature importance. */
 #define C_API_FEATURE_IMPORTANCE_GAIN  (1)  /*!< \brief Gain type of feature importance. */
 
-#define C_API_LOG_FATAL   (-1)  /*!< \brief Fatal log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
-#define C_API_LOG_WARNING  (0)  /*!< \brief Warning log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
-#define C_API_LOG_INFO     (1)  /*!< \brief Info log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
-#define C_API_LOG_DEBUG    (2)  /*!< \brief Debug log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
+#define C_API_LOG_LEVEL_FATAL   (-1)  /*!< \brief Fatal log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
+#define C_API_LOG_LEVEL_WARNING  (0)  /*!< \brief Warning log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
+#define C_API_LOG_LEVEL_INFO     (1)  /*!< \brief Info log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
+#define C_API_LOG_LEVEL_DEBUG    (2)  /*!< \brief Debug log level, for use with ``LGBM_RegisterLogCallbackWithLevel``. */
 
 /*!
  * \brief Get string message of the last error.
@@ -80,7 +80,7 @@ LIGHTGBM_C_EXPORT int LGBM_RegisterLogCallback(void (*callback)(const char*));
 /*!
  * \brief Register a callback function for log redirecting, with log level information.
  * \note
- * The callback receives the log level as an int (see ``C_API_LOG_*`` constants)
+ * The callback receives the log level as an int (see ``C_API_LOG_LEVEL_*`` constants)
  * and the fully-assembled message body (without prefix or trailing newline).
  * Each log event produces exactly one callback invocation.
  * If both ``LGBM_RegisterLogCallback`` and this function are called on the same thread,
@@ -88,11 +88,21 @@ LIGHTGBM_C_EXPORT int LGBM_RegisterLogCallback(void (*callback)(const char*));
  * (both for normal log messages and for fatal errors).
  * The callback must not throw; throwing from a C callback is undefined behaviour.
  * The callback is only invoked on the thread that called this function;
- * log messages from OpenMP worker threads may bypass the callback.
+ * log messages from OpenMP worker threads will bypass the callback.
  * \param callback The callback function to register
  * \return 0 when succeed, -1 when failure happens
  */
 LIGHTGBM_C_EXPORT int LGBM_RegisterLogCallbackWithLevel(void (*callback)(int, const char*));
+
+/*!
+ * \brief Unregister the leveled log callback.
+ * \note
+ * This function resets the leveled callback pointer to ``nullptr`` on the calling thread.
+ * This is useful for cleanup in multi-threaded scenarios or in test fixtures to avoid
+ * dangling function pointers after the callback's lifetime ends.
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_UnregisterLogCallbackWithLevel(void);
 
 /*!
  * \brief Get number of samples based on parameters and total number of rows of data.

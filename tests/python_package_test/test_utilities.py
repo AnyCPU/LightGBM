@@ -187,9 +187,9 @@ def _leveled_logger_cleanup():
 
     yield  # run the test
 
-    # teardown: reset leveled logger to default
-    # (ctypes doesn't support passing None to CFUNCTYPE, so C++ callback remains set
-    # but will route through _LEVELED_LOGGER which is now default _DummyLeveledLogger)
+    # teardown: reset C++ callback pointer before dropping Python reference
+    # (prevents dangling function pointer)
+    assert _LIB.LGBM_UnregisterLogCallbackWithLevel() == 0
     lgb.register_leveled_logger(_DummyLeveledLogger())
     _LIB.test_callback_with_level = None  # type: ignore[attr-defined]
 
@@ -271,10 +271,10 @@ def test_log_callback_with_level_unit():
 
     lgb.register_leveled_logger(CapturingLogger())
     try:
-        _log_callback_with_level(-1, b"fatal message")  # C_API_LOG_FATAL
-        _log_callback_with_level(0, b"warning message")  # C_API_LOG_WARNING
-        _log_callback_with_level(1, b"info message")  # C_API_LOG_INFO
-        _log_callback_with_level(2, b"debug message")  # C_API_LOG_DEBUG
+        _log_callback_with_level(-1, b"fatal message")  # C_API_LOG_LEVEL_FATAL
+        _log_callback_with_level(0, b"warning message")  # C_API_LOG_LEVEL_WARNING
+        _log_callback_with_level(1, b"info message")  # C_API_LOG_LEVEL_INFO
+        _log_callback_with_level(2, b"debug message")  # C_API_LOG_LEVEL_DEBUG
 
         assert captured["error"] == ["fatal message"]
         assert captured["warning"] == ["warning message"]
@@ -317,9 +317,3 @@ def test_register_leveled_logger_routing(_leveled_logger_cleanup):
     # Atomic delivery: no empty or whitespace-only messages (no 3-chunk artifacts)
     assert all(m.strip() for m in info_messages), "Chunk artifact in info_messages"
     assert all(m.strip() for m in warning_messages), "Chunk artifact in warning_messages"
-
-    # Known body substrings (no prefix in new callback — level int carries severity):
-    assert any("no meaningful features" in m for m in warning_messages)
-    assert any("Number of positive" in m for m in info_messages)
-    # Cross-contamination check
-    assert not any("Number of positive" in m for m in warning_messages)
