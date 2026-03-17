@@ -109,6 +109,17 @@ LIGHTGBM_C_EXPORT int LGBM_SampleIndices(int32_t num_total_row,
 LIGHTGBM_C_EXPORT int LGBM_ByteBufferGetAt(ByteBufferHandle handle, int32_t index, uint8_t* out_val);
 
 /*!
+ * \brief Get data from a byte buffer.
+ *        Call with out_data == NULL to get the required buffer size.
+ *        Call with out_data != NULL to copy the data.
+ * \param handle Handle of byte buffer
+ * \param[out] out_len Number of bytes in the buffer
+ * \param[out] out_data If not NULL, buffer to copy data into (must be at least out_len bytes)
+ * \return 0 when succeed, -1 when failure happens
+ */
+LIGHTGBM_C_EXPORT int LGBM_ByteBufferGetData(ByteBufferHandle handle, int32_t* out_len, uint8_t* out_data);
+
+/*!
  * \brief Free space for byte buffer.
  * \param handle Handle of byte buffer to be freed
  * \return 0 when succeed, -1 when failure happens

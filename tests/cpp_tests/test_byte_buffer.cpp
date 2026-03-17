@@ -5,6 +5,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <LightGBM/c_api.h>
 #include <LightGBM/utils/byte_buffer.h>
 
 #include <memory>
@@ -70,4 +71,27 @@ TEST(ByteBuffer, JustWorks) {
 
   // Test that Data() points to first value written
   EXPECT_EQ(int8Val, *buffer->Data());
+}
+
+TEST(ByteBuffer, GetDataTwoCallPattern) {
+  // Write known data
+  std::unique_ptr<ByteBuffer> buffer(new ByteBuffer());
+  const uint8_t data[] = {0x01, 0x02, 0x03, 0xAB, 0xCD};
+  buffer->Write(data, sizeof(data));
+
+  ByteBufferHandle handle = reinterpret_cast<ByteBufferHandle>(buffer.get());
+
+  // First call: get size with out_data == nullptr
+  int32_t out_len = 0;
+  int ret = LGBM_ByteBufferGetData(handle, &out_len, nullptr);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(static_cast<int32_t>(sizeof(data)), out_len);
+
+  // Second call: copy data into caller-allocated buffer
+  std::vector<uint8_t> out(out_len);
+  ret = LGBM_ByteBufferGetData(handle, &out_len, out.data());
+  EXPECT_EQ(0, ret);
+  for (int32_t i = 0; i < out_len; ++i) {
+    EXPECT_EQ(data[i], out[i]);
+  }
 }

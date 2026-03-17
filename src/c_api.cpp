@@ -1031,6 +1031,16 @@ int LGBM_ByteBufferGetAt(ByteBufferHandle handle, int32_t index, uint8_t* out_va
   API_END();
 }
 
+int LGBM_ByteBufferGetData(ByteBufferHandle handle, int32_t* out_len, uint8_t* out_data) {
+  API_BEGIN();
+  LightGBM::ByteBuffer* buf = reinterpret_cast<LightGBM::ByteBuffer*>(handle);
+  *out_len = static_cast<int32_t>(buf->GetSize());
+  if (out_data != nullptr) {
+    std::memcpy(out_data, buf->Data(), buf->GetSize());
+  }
+  API_END();
+}
+
 int LGBM_ByteBufferFree(ByteBufferHandle handle) {
   API_BEGIN();
   delete reinterpret_cast<LightGBM::ByteBuffer*>(handle);
