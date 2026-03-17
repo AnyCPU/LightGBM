@@ -29,11 +29,7 @@ def test_register_logger(tmp_path):
     lgb_valid = lgb.Dataset(X, y, categorical_feature=[1])  # different object for early-stopping
 
     eval_records = {}
-    callbacks = [
-        lgb.record_evaluation(eval_records),
-        lgb.log_evaluation(2),
-        lgb.early_stopping(10),
-    ]
+    callbacks = [lgb.record_evaluation(eval_records), lgb.log_evaluation(2), lgb.early_stopping(10)]
     lgb.train(
         {"objective": "binary", "metric": ["auc", "binary_error"], "verbose": 1},
         lgb_train,
@@ -143,11 +139,7 @@ def test_register_custom_logger():
             logged_messages.append(msg)
 
     custom_logger = CustomLogger()
-    lgb.register_logger(
-        custom_logger,
-        info_method_name="custom_info",
-        warning_method_name="custom_warning",
-    )
+    lgb.register_logger(custom_logger, info_method_name="custom_info", warning_method_name="custom_warning")
 
     lgb.basic._log_info("info message")
     lgb.basic._log_warning("warning message")
@@ -347,15 +339,11 @@ def test_unregister_leveled_logger():
     try:
         # Register A, verify thunk is set
         lgb.register_leveled_logger(LoggerA())
-        assert getattr(_LIB, "callback_with_level", None) is not None, (
-            "Thunk should be set after registration"
-        )
+        assert getattr(_LIB, "callback_with_level", None) is not None, "Thunk should be set after registration"
 
         # Unregister — thunk should be cleared
         lgb.unregister_leveled_logger()
-        assert getattr(_LIB, "callback_with_level", None) is None, (
-            "Thunk should be cleared after unregistration"
-        )
+        assert getattr(_LIB, "callback_with_level", None) is None, "Thunk should be cleared after unregistration"
 
         # Idempotency — second unregister should not raise
         lgb.unregister_leveled_logger()
@@ -375,10 +363,17 @@ def test_fatal_through_leveled_callback(_leveled_logger_cleanup):
     captured_errors: list = []
 
     class CapturingLogger:
-        def debug(self, msg): pass
-        def info(self, msg): pass
-        def warning(self, msg): pass
-        def error(self, msg): captured_errors.append(msg)
+        def debug(self, msg):
+            pass
+
+        def info(self, msg):
+            pass
+
+        def warning(self, msg):
+            pass
+
+        def error(self, msg):
+            captured_errors.append(msg)
 
     lgb.register_leveled_logger(CapturingLogger())
 
