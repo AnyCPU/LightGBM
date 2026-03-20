@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import lightgbm as lgb
+from lightgbm.basic import _LIB, _DummyLeveledLogger, _log_callback_with_level
 
 
 def test_register_logger(tmp_path):
@@ -160,11 +161,9 @@ def test_register_custom_logger():
     assert logged_messages, "custom logger was not called"
 
 
-@pytest.fixture()
+@pytest.fixture
 def _leveled_logger_cleanup():
     """Register leveled callback and guarantee cleanup regardless of test outcome."""
-    from lightgbm.basic import _DummyLeveledLogger
-
     # Create a dummy logger and register it to initialize the callback infrastructure
     lgb.register_leveled_logger(_DummyLeveledLogger())
 
@@ -231,9 +230,8 @@ def test_register_leveled_logger_invalid():
         lgb.register_leveled_logger(NotCallable())
 
 
-def test_log_callback_with_level_unit(_leveled_logger_cleanup):
-    from lightgbm.basic import _log_callback_with_level
-
+@pytest.mark.usefixtures("_leveled_logger_cleanup")
+def test_log_callback_with_level_unit():
     captured: dict = {"debug": [], "info": [], "warning": [], "error": []}
 
     class CapturingLogger:
@@ -261,9 +259,8 @@ def test_log_callback_with_level_unit(_leveled_logger_cleanup):
     assert captured["debug"] == ["debug message"]
 
 
-def test_register_leveled_logger_routing(_leveled_logger_cleanup):
-    from lightgbm.basic import _log_callback_with_level
-
+@pytest.mark.usefixtures("_leveled_logger_cleanup")
+def test_register_leveled_logger_routing():
     info_messages: list = []
     warning_messages: list = []
 
@@ -305,8 +302,6 @@ def test_register_leveled_logger_routing(_leveled_logger_cleanup):
 
 def test_unregister_leveled_logger():
     """Test that unregister_leveled_logger() properly cleans up and allows re-registration."""
-    from lightgbm.basic import _LIB, _log_callback_with_level
-
     captured_a: list = []
     captured_b: list = []
 
@@ -358,7 +353,8 @@ def test_unregister_leveled_logger():
         lgb.unregister_leveled_logger()
 
 
-def test_fatal_through_leveled_callback(_leveled_logger_cleanup):
+@pytest.mark.usefixtures("_leveled_logger_cleanup")
+def test_fatal_through_leveled_callback():
     """Test that C++ Log::Fatal() routes through the leveled callback end-to-end."""
     captured_errors: list = []
 
@@ -377,7 +373,7 @@ def test_fatal_through_leveled_callback(_leveled_logger_cleanup):
 
     lgb.register_leveled_logger(CapturingLogger())
 
-    with pytest.raises(lgb.basic.LightGBMError):
+    with pytest.raises(lgb.basic.LightGBMError, match="number of classes"):
         lgb.Booster(model_str="not_a_valid_model")
 
     # Fatal message was routed through the leveled callback to logger.error()
