@@ -110,14 +110,19 @@ LIGHTGBM_C_EXPORT int LGBM_ByteBufferGetAt(ByteBufferHandle handle, int32_t inde
 
 /*!
  * \brief Get data from a byte buffer.
- *        Call with out_data == NULL to get the required buffer size.
+ *        Call with out_data == NULL (or buffer_len == 0) to get the required buffer size.
  *        Call with out_data != NULL to copy the data.
  * \param handle Handle of byte buffer
- * \param[out] out_len Number of bytes in the buffer
- * \param[out] out_data If not NULL, buffer to copy data into (must be at least out_len bytes)
+ * \param buffer_len Output buffer length, if ``buffer_len < out_len``, no data is copied and
+ *        you should re-allocate buffer before calling again
+ * \param[out] out_len Actual number of bytes in the buffer
+ * \param[out] out_data If not NULL and ``buffer_len >= out_len``, buffer to copy data into
  * \return 0 when succeed, -1 when failure happens
  */
-LIGHTGBM_C_EXPORT int LGBM_ByteBufferGetData(ByteBufferHandle handle, int32_t* out_len, uint8_t* out_data);
+LIGHTGBM_C_EXPORT int LGBM_ByteBufferGetData(ByteBufferHandle handle,
+                                             int64_t buffer_len,
+                                             int64_t* out_len,
+                                             uint8_t* out_data);
 
 /*!
  * \brief Free space for byte buffer.

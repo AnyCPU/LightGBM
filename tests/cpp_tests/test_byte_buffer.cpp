@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <random>
+#include <vector>
 
 using LightGBM::ByteBuffer;
 
@@ -82,16 +83,63 @@ TEST(ByteBuffer, GetDataTwoCallPattern) {
   ByteBufferHandle handle = reinterpret_cast<ByteBufferHandle>(buffer.get());
 
   // First call: get size with out_data == nullptr
-  int32_t out_len = 0;
-  int ret = LGBM_ByteBufferGetData(handle, &out_len, nullptr);
+  int64_t out_len = 0;
+  int ret = LGBM_ByteBufferGetData(handle, 0, &out_len, nullptr);
   EXPECT_EQ(0, ret);
-  EXPECT_EQ(static_cast<int32_t>(sizeof(data)), out_len);
+  EXPECT_EQ(static_cast<int64_t>(sizeof(data)), out_len);
 
   // Second call: copy data into caller-allocated buffer
   std::vector<uint8_t> out(out_len);
-  ret = LGBM_ByteBufferGetData(handle, &out_len, out.data());
+  ret = LGBM_ByteBufferGetData(handle, out_len, &out_len, out.data());
   EXPECT_EQ(0, ret);
-  for (int32_t i = 0; i < out_len; ++i) {
+  for (int64_t i = 0; i < out_len; ++i) {
     EXPECT_EQ(data[i], out[i]);
   }
+}
+
+TEST(ByteBuffer, GetDataEmptyBuffer) {
+  // An empty buffer's Data() pointer may be null; GetData must not memcpy from it.
+  std::unique_ptr<ByteBuffer> buffer(new ByteBuffer());
+  ByteBufferHandle handle = reinterpret_cast<ByteBufferHandle>(buffer.get());
+
+  int64_t out_len = -1;
+  int ret = LGBM_ByteBufferGetData(handle, 0, &out_len, nullptr);
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(0, out_len);
+
+  // Even with a non-null destination, size 0 means no copy is attempted.
+  std::vector<uint8_t> out(1, 0xFF);
+  ret = LGBM_ByteBufferGetData(handle, static_cast<int64_t>(out.size()), &out_len, out.data());
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(0, out_len);
+  EXPECT_EQ(0xFF, out[0]);
+}
+
+TEST(ByteBuffer, GetDataUndersizedBufferIsAllOrNothing) {
+  // buffer_len < required size: nothing should be copied, and out_len should
+  // still report the true required size (mirrors LGBM_BoosterSaveModelToString).
+  std::unique_ptr<ByteBuffer> buffer(new ByteBuffer());
+  const uint8_t data[] = {0x11, 0x22, 0x33, 0x44};
+  buffer->Write(data, sizeof(data));
+  ByteBufferHandle handle = reinterpret_cast<ByteBufferHandle>(buffer.get());
+
+  std::vector<uint8_t> out(sizeof(data), 0xFF);
+  int64_t out_len = -1;
+  int ret = LGBM_ByteBufferGetData(handle, static_cast<int64_t>(sizeof(data)) - 1, &out_len, out.data());
+  EXPECT_EQ(0, ret);
+  EXPECT_EQ(static_cast<int64_t>(sizeof(data)), out_len);
+  for (size_t i = 0; i < out.size(); ++i) {
+    EXPECT_EQ(0xFF, out[i]);
+  }
+}
+
+TEST(ByteBuffer, GetDataNullArgsReturnError) {
+  std::unique_ptr<ByteBuffer> buffer(new ByteBuffer());
+  const uint8_t data[] = {0x01};
+  buffer->Write(data, sizeof(data));
+  ByteBufferHandle handle = reinterpret_cast<ByteBufferHandle>(buffer.get());
+
+  int64_t out_len = 0;
+  EXPECT_EQ(-1, LGBM_ByteBufferGetData(nullptr, 0, &out_len, nullptr));
+  EXPECT_EQ(-1, LGBM_ByteBufferGetData(handle, 0, nullptr, nullptr));
 }
