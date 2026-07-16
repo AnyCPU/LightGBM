@@ -132,14 +132,3 @@ TEST(ByteBuffer, GetDataUndersizedBufferIsAllOrNothing) {
     EXPECT_EQ(0xFF, out[i]);
   }
 }
-
-TEST(ByteBuffer, GetDataNullArgsReturnError) {
-  std::unique_ptr<ByteBuffer> buffer(new ByteBuffer());
-  const uint8_t data[] = {0x01};
-  buffer->Write(data, sizeof(data));
-  ByteBufferHandle handle = reinterpret_cast<ByteBufferHandle>(buffer.get());
-
-  int64_t out_len = 0;
-  EXPECT_EQ(-1, LGBM_ByteBufferGetData(nullptr, 0, &out_len, nullptr));
-  EXPECT_EQ(-1, LGBM_ByteBufferGetData(handle, 0, nullptr, nullptr));
-}

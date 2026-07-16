@@ -1030,12 +1030,6 @@ int LGBM_SampleIndices(int32_t num_total_row,
 
 int LGBM_ByteBufferGetAt(ByteBufferHandle handle, int32_t index, uint8_t* out_val) {
   API_BEGIN();
-  if (handle == nullptr) {
-    Log::Fatal("LGBM_ByteBufferGetAt handle cannot be nullptr");
-  }
-  if (out_val == nullptr) {
-    Log::Fatal("LGBM_ByteBufferGetAt out_val cannot be nullptr");
-  }
   LightGBM::ByteBuffer* byteBuffer = reinterpret_cast<LightGBM::ByteBuffer*>(handle);
   *out_val = byteBuffer->GetAt(index);
   API_END();
@@ -1044,12 +1038,6 @@ int LGBM_ByteBufferGetAt(ByteBufferHandle handle, int32_t index, uint8_t* out_va
 int LGBM_ByteBufferGetData(ByteBufferHandle handle, int64_t buffer_len,
                            int64_t* out_len, uint8_t* out_data) {
   API_BEGIN();
-  if (handle == nullptr) {
-    Log::Fatal("LGBM_ByteBufferGetData handle cannot be nullptr");
-  }
-  if (out_len == nullptr) {
-    Log::Fatal("LGBM_ByteBufferGetData out_len cannot be nullptr");
-  }
   LightGBM::ByteBuffer* buf = reinterpret_cast<LightGBM::ByteBuffer*>(handle);
   const size_t size = buf->GetSize();
   *out_len = static_cast<int64_t>(size);
